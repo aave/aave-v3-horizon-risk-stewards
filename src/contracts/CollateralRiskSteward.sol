@@ -6,6 +6,9 @@ import {IRiskSteward, RiskSteward} from './RiskSteward.sol';
 
 /**
  * @title CollateralRiskSteward
+ * @author Aave labs
+ * @notice Contract to manage the risk params without bounds on Horizon aave v3 pool:
+ *         This contract can update the following risk params: ltv, liqThreshold, liqBonus, debtCeiling.
  */
 contract CollateralRiskSteward is RiskSteward {
   /**
