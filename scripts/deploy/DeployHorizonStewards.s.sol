@@ -79,7 +79,8 @@ library DeployHorizonRiskStewards {
   }
 }
 
-// make deploy-ledger contract=scripts/deploy/DeployStewards.s.sol:DeployEthereum chain=mainnet
+// make deploy-ledger contract=scripts/deploy/DeployHorizonStewards.s.sol:DeployEthereum chain=mainnet
+// dry run: make deploy-pk contract=scripts/deploy/DeployHorizonStewards.s.sol:DeployEthereum chain=mainnet dry=1
 contract DeployEthereum is EthereumScript {
   function run() external {
     vm.startBroadcast();
