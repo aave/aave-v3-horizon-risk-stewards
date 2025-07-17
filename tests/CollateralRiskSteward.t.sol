@@ -1,14 +1,10 @@
 // SPDX-License-Identifier: BUSL-1.1
 pragma solidity ^0.8.0;
 
-import {console2 as console} from 'forge-std/console2.sol';
-
 import {ReserveConfiguration, DataTypes} from 'aave-v3-origin/src/contracts/protocol/libraries/configuration/ReserveConfiguration.sol';
 import {GovernanceV3Ethereum} from 'aave-address-book/GovernanceV3Ethereum.sol';
 import {AaveV3Ethereum, AaveV3EthereumAssets} from 'aave-address-book/AaveV3Ethereum.sol';
 import {RiskSteward, IRiskSteward, IEngine, EngineFlags} from 'src/contracts/RiskSteward.sol';
-// import {CollateralRiskSteward} from 'src/contracts/CollateralRiskSteward.sol';
-import {IAaveV3ConfigEngine as IEngine} from 'aave-v3-origin/src/contracts/extensions/v3-config-engine/IAaveV3ConfigEngine.sol';
 import {DeployHorizonRiskStewards} from '../scripts/deploy/DeployHorizonStewards.s.sol';
 import {RiskSteward_Test} from './RiskSteward.t.sol';
 
@@ -63,7 +59,7 @@ contract CollateralRiskSteward_Test is RiskSteward_Test {
     assertEq(lastUpdated.borrowCapLastUpdated, 0);
 
     // after min time passed test caps decrease
-    skip(MIN_DELAY);
+    vm.warp(MIN_DELAY);
     (daiBorrowCapBefore, daiSupplyCapBefore) = AaveV3Ethereum
       .AAVE_PROTOCOL_DATA_PROVIDER
       .getReserveCaps(AaveV3EthereumAssets.DAI_UNDERLYING);
@@ -87,44 +83,8 @@ contract CollateralRiskSteward_Test is RiskSteward_Test {
   }
 
   function test_updateCaps_outOfRange() public virtual override {
-    (uint256 daiBorrowCapBefore, uint256 daiSupplyCapBefore) = AaveV3Ethereum
-      .AAVE_PROTOCOL_DATA_PROVIDER
-      .getReserveCaps(AaveV3EthereumAssets.DAI_UNDERLYING);
-
-    IEngine.CapsUpdate[] memory capUpdates = new IEngine.CapsUpdate[](1);
-    capUpdates[0] = IEngine.CapsUpdate(
-      AaveV3EthereumAssets.DAI_UNDERLYING,
-      (daiSupplyCapBefore * 210) / 100, // 110% relative increase (current maxChangePercent configured is 100%)
-      (daiBorrowCapBefore * 210) / 100 // 110% relative increase
-    );
-
-    skip(MIN_DELAY);
-
-    vm.prank(riskCouncil);
-    vm.expectRevert(IRiskSteward.UpdateNotInRange.selector);
-    steward.updateCaps(capUpdates);
-
-    IRiskSteward.RiskParamConfig memory newConfig = IRiskSteward.RiskParamConfig({
-      minDelay: 3 days,
-      maxPercentChange: 10_00
-    });
-    IRiskSteward.Config memory config = riskConfig;
-    config.capConfig.supplyCap = newConfig;
-    config.capConfig.borrowCap = newConfig;
-
-    vm.prank(GovernanceV3Ethereum.EXECUTOR_LVL_1);
-    steward.setRiskConfig(config);
-
-    capUpdates[0] = IEngine.CapsUpdate(
-      AaveV3EthereumAssets.DAI_UNDERLYING,
-      (daiSupplyCapBefore * 80) / 100, // 20% relative decrease
-      (daiBorrowCapBefore * 80) / 100 // 20% relative decrease
-    );
-    vm.prank(riskCouncil);
-    vm.expectRevert(IRiskSteward.UpdateNotInRange.selector);
-    steward.updateCaps(capUpdates);
-
-    vm.stopPrank();
+    vm.warp(MIN_DELAY);
+    super.test_updateCaps_outOfRange();
   }
 
   function test_updateCaps_debounceNotRespected() public virtual override {
@@ -155,7 +115,7 @@ contract CollateralRiskSteward_Test is RiskSteward_Test {
       daiBorrowCapBefore + 1
     );
 
-    skip(MIN_DELAY - vm.getBlockTimestamp() - 1);
+    vm.warp(MIN_DELAY - 1);
 
     // expect revert as minimum time has not passed for next update
     vm.expectRevert(IRiskSteward.DebounceNotRespected.selector);
@@ -165,27 +125,8 @@ contract CollateralRiskSteward_Test is RiskSteward_Test {
 
   /// should revert due to config
   function test_updateCaps_sameUpdate() public virtual override {
-    (uint256 daiBorrowCapBefore, uint256 daiSupplyCapBefore) = AaveV3Ethereum
-      .AAVE_PROTOCOL_DATA_PROVIDER
-      .getReserveCaps(AaveV3EthereumAssets.DAI_UNDERLYING);
-
-    IEngine.CapsUpdate[] memory capUpdates = new IEngine.CapsUpdate[](1);
-    capUpdates[0] = IEngine.CapsUpdate(
-      AaveV3EthereumAssets.DAI_UNDERLYING,
-      daiSupplyCapBefore,
-      daiBorrowCapBefore
-    );
-
-    skip(MIN_DELAY);
-    vm.prank(riskCouncil);
-    steward.updateCaps(capUpdates);
-
-    (uint256 daiBorrowCapAfter, uint256 daiSupplyCapAfter) = AaveV3Ethereum
-      .AAVE_PROTOCOL_DATA_PROVIDER
-      .getReserveCaps(AaveV3EthereumAssets.DAI_UNDERLYING);
-
-    assertEq(daiBorrowCapBefore, daiBorrowCapAfter);
-    assertEq(daiSupplyCapBefore, daiSupplyCapAfter);
+    vm.warp(MIN_DELAY);
+    super.test_updateCaps_sameUpdate();
   }
 
   function test_updateCaps_assetUnlisted() public virtual override {
@@ -194,7 +135,7 @@ contract CollateralRiskSteward_Test is RiskSteward_Test {
     IEngine.CapsUpdate[] memory capUpdates = new IEngine.CapsUpdate[](1);
     capUpdates[0] = IEngine.CapsUpdate(unlistedAsset, 100, 100);
 
-    skip(MIN_DELAY);
+    vm.warp(MIN_DELAY);
 
     vm.prank(riskCouncil);
     // as the update is from value 0
@@ -250,7 +191,7 @@ contract CollateralRiskSteward_Test is RiskSteward_Test {
     assertEq(lastUpdated.variableRateSlope2LastUpdated, 0);
 
     // after min time passed
-    skip(MIN_DELAY);
+    vm.warp(MIN_DELAY);
 
     // should still revert due to UpdateNotInRange
     vm.expectRevert(IRiskSteward.UpdateNotInRange.selector);
@@ -277,29 +218,8 @@ contract CollateralRiskSteward_Test is RiskSteward_Test {
   }
 
   function test_updateRates_outOfRange() public virtual override {
-    (
-      uint256 beforeOptimalUsageRatio,
-      uint256 beforeBaseVariableBorrowRate,
-      uint256 beforeVariableRateSlope1,
-      uint256 beforeVariableRateSlope2
-    ) = _getInterestRatesForAsset(AaveV3EthereumAssets.WETH_UNDERLYING);
-
-    IEngine.RateStrategyUpdate[] memory rateUpdates = new IEngine.RateStrategyUpdate[](1);
-    rateUpdates[0] = IEngine.RateStrategyUpdate({
-      asset: AaveV3EthereumAssets.WETH_UNDERLYING,
-      params: IEngine.InterestRateInputData({
-        optimalUsageRatio: beforeOptimalUsageRatio + 12_00, // 12% absolute increase
-        baseVariableBorrowRate: beforeBaseVariableBorrowRate + 12_00, // 12% absolute increase
-        variableRateSlope1: beforeVariableRateSlope1 + 12_00, // 12% absolute increase
-        variableRateSlope2: beforeVariableRateSlope2 + 12_00 // 12% absolute increase
-      })
-    });
-
-    skip(MIN_DELAY);
-
-    vm.expectRevert(IRiskSteward.UpdateNotInRange.selector);
-    vm.prank(riskCouncil);
-    steward.updateRates(rateUpdates);
+    vm.warp(MIN_DELAY);
+    super.test_updateRates_outOfRange();
   }
 
   function test_updateRates_debounceNotRespected() public virtual override {
@@ -326,7 +246,7 @@ contract CollateralRiskSteward_Test is RiskSteward_Test {
     vm.expectRevert(IRiskSteward.DebounceNotRespected.selector);
     steward.updateRates(rateUpdates);
 
-    skip(MIN_DELAY - vm.getBlockTimestamp() - 1);
+    vm.warp(MIN_DELAY - 1);
 
     // should revert as minimum time has not passed for next update
     vm.expectRevert(IRiskSteward.DebounceNotRespected.selector);
@@ -335,412 +255,161 @@ contract CollateralRiskSteward_Test is RiskSteward_Test {
   }
 
   function test_updateRate_sameUpdate() public virtual override {
-    (
-      uint256 beforeOptimalUsageRatio,
-      uint256 beforeBaseVariableBorrowRate,
-      uint256 beforeVariableRateSlope1,
-      uint256 beforeVariableRateSlope2
-    ) = _getInterestRatesForAsset(AaveV3EthereumAssets.WETH_UNDERLYING);
-
-    IEngine.RateStrategyUpdate[] memory rateUpdates = new IEngine.RateStrategyUpdate[](1);
-    rateUpdates[0] = IEngine.RateStrategyUpdate({
-      asset: AaveV3EthereumAssets.WETH_UNDERLYING,
-      params: IEngine.InterestRateInputData({
-        optimalUsageRatio: beforeOptimalUsageRatio,
-        baseVariableBorrowRate: beforeBaseVariableBorrowRate,
-        variableRateSlope1: beforeVariableRateSlope1,
-        variableRateSlope2: beforeVariableRateSlope2
-      })
-    });
-
-    skip(MIN_DELAY);
-
-    vm.startPrank(riskCouncil);
-    steward.updateRates(rateUpdates);
-
-    (
-      uint256 afterOptimalUsageRatio,
-      uint256 afterBaseVariableBorrowRate,
-      uint256 afterVariableRateSlope1,
-      uint256 afterVariableRateSlope2
-    ) = _getInterestRatesForAsset(AaveV3EthereumAssets.WETH_UNDERLYING);
-
-    assertEq(beforeOptimalUsageRatio, afterOptimalUsageRatio);
-    assertEq(beforeBaseVariableBorrowRate, afterBaseVariableBorrowRate);
-    assertEq(beforeVariableRateSlope1, afterVariableRateSlope1);
-    assertEq(beforeVariableRateSlope2, afterVariableRateSlope2);
+    vm.warp(MIN_DELAY);
+    super.test_updateRate_sameUpdate();
   }
 
-  // /* ----------------------------- EMode Category Update Tests ----------------------------- */
-  // function test_updateEModeCategories_revertsWith_UpdateNotAllowed() public virtual {
-  //   uint8 eModeId = 1;
-  //   IEngine.EModeCategoryUpdate[] memory eModeCategoryUpdates = new IEngine.EModeCategoryUpdate[](
-  //     1
-  //   );
-  //   eModeCategoryUpdates[0] = IEngine.EModeCategoryUpdate({
-  //     eModeCategory: eModeId,
-  //     ltv: 0,
-  //     liqThreshold: 0,
-  //     liqBonus: 0,
-  //     label: EngineFlags.KEEP_CURRENT_STRING
-  //   });
+  /* ----------------------------- EMode Category Update Tests ----------------------------- */
+  /// should revert due to config
+  function test_updateEModeCategories() public virtual override {
+    uint8 eModeId = 1;
+    DataTypes.CollateralConfig memory currentEmodeConfig = AaveV3Ethereum
+      .POOL
+      .getEModeCategoryCollateralConfig(eModeId);
+    string memory label = AaveV3Ethereum.POOL.getEModeCategoryLabel(eModeId);
 
-  //   vm.expectRevert(IRiskSteward.UpdateNotAllowed.selector);
-  //   vm.prank(riskCouncil);
-  //   steward.updateEModeCategories(eModeCategoryUpdates);
-  // }
+    IEngine.EModeCategoryUpdate[] memory eModeCategoryUpdates = new IEngine.EModeCategoryUpdate[](
+      1
+    );
+    eModeCategoryUpdates[0] = IEngine.EModeCategoryUpdate({
+      eModeCategory: eModeId,
+      ltv: currentEmodeConfig.ltv + 50, // 0.5% absolute increase
+      liqThreshold: currentEmodeConfig.liquidationThreshold + 10, // 0.1% absolute increase
+      liqBonus: (currentEmodeConfig.liquidationBonus - 100_00) + 50, // 0.5% absolute increase
+      label: EngineFlags.KEEP_CURRENT_STRING
+    });
 
-  // /// should revert as UpdateNotAllowed
-  // function test_updateEModeCategories() public virtual override {
-  //   uint8 eModeId = 1;
-  //   DataTypes.CollateralConfig memory currentEmodeConfig = AaveV3Ethereum
-  //     .POOL
-  //     .getEModeCategoryCollateralConfig(eModeId);
-  //   string memory label = AaveV3Ethereum.POOL.getEModeCategoryLabel(eModeId);
+    vm.startPrank(riskCouncil);
+    // expect revert as minimum time has not passed for next update
+    vm.expectRevert(IRiskSteward.DebounceNotRespected.selector);
+    steward.updateEModeCategories(eModeCategoryUpdates);
 
-  //   IEngine.EModeCategoryUpdate[] memory eModeCategoryUpdates = new IEngine.EModeCategoryUpdate[](
-  //     1
-  //   );
-  //   eModeCategoryUpdates[0] = IEngine.EModeCategoryUpdate({
-  //     eModeCategory: eModeId,
-  //     ltv: currentEmodeConfig.ltv + 50, // 0.5% absolute increase
-  //     liqThreshold: currentEmodeConfig.liquidationThreshold + 10, // 0.1% absolute increase
-  //     liqBonus: (currentEmodeConfig.liquidationBonus - 100_00) + 50, // 0.5% absolute increase
-  //     label: EngineFlags.KEEP_CURRENT_STRING
-  //   });
+    RiskSteward.EModeDebounce memory lastUpdated = steward.getEModeTimelock(eModeId);
 
-  //   vm.startPrank(riskCouncil);
-  //   vm.expectRevert(IRiskSteward.UpdateNotAllowed.selector);
-  //   steward.updateEModeCategories(eModeCategoryUpdates);
+    DataTypes.CollateralConfig memory afterEmodeConfig = AaveV3Ethereum
+      .POOL
+      .getEModeCategoryCollateralConfig(eModeId);
+    string memory afterLabel = AaveV3Ethereum.POOL.getEModeCategoryLabel(eModeId);
 
-  //   RiskSteward.EModeDebounce memory lastUpdated = steward.getEModeTimelock(eModeId);
+    assertEq(afterEmodeConfig.ltv, currentEmodeConfig.ltv);
+    assertEq(afterEmodeConfig.liquidationThreshold, currentEmodeConfig.liquidationThreshold);
+    assertEq(afterEmodeConfig.liquidationBonus, currentEmodeConfig.liquidationBonus);
+    assertEq(afterLabel, label);
 
-  //   DataTypes.CollateralConfig memory afterEmodeConfig = AaveV3Ethereum
-  //     .POOL
-  //     .getEModeCategoryCollateralConfig(eModeId);
-  //   string memory afterLabel = AaveV3Ethereum.POOL.getEModeCategoryLabel(eModeId);
+    assertEq(lastUpdated.eModeLtvLastUpdated, 0);
+    assertEq(lastUpdated.eModeLiquidationThresholdLastUpdated, 0);
+    assertEq(lastUpdated.eModeLiquidationBonusLastUpdated, 0);
 
-  //   assertNotEq(afterEmodeConfig.ltv, eModeCategoryUpdates[0].ltv);
-  //   assertNotEq(afterEmodeConfig.liquidationThreshold, eModeCategoryUpdates[0].liqThreshold);
-  //   assertNotEq(afterEmodeConfig.liquidationBonus - 100_00, eModeCategoryUpdates[0].liqBonus);
-  //   assertEq(afterLabel, label); // remains same as original
+    // after min time passed test eMode update decrease
+    vm.warp(MIN_DELAY);
 
-  //   assertNotEq(lastUpdated.eModeLtvLastUpdated, vm.getBlockTimestamp());
-  //   assertNotEq(lastUpdated.eModeLiquidationThresholdLastUpdated, vm.getBlockTimestamp());
-  //   assertNotEq(lastUpdated.eModeLiquidationBonusLastUpdated, vm.getBlockTimestamp());
+    currentEmodeConfig = AaveV3Ethereum.POOL.getEModeCategoryCollateralConfig(eModeId);
 
-  //   // after min time passed test eMode update decrease
-  //   skip(1);
+    eModeCategoryUpdates[0] = IEngine.EModeCategoryUpdate({
+      eModeCategory: eModeId,
+      ltv: currentEmodeConfig.ltv - 50, // 0.5% absolute increase
+      liqThreshold: currentEmodeConfig.liquidationThreshold - 10, // 0.1% absolute increase
+      liqBonus: (currentEmodeConfig.liquidationBonus - 100_00) - 50, // 0.5% absolute increase
+      label: EngineFlags.KEEP_CURRENT_STRING
+    });
+    // expect revert as UpdateNotInRange
+    vm.expectRevert(IRiskSteward.UpdateNotInRange.selector);
+    steward.updateEModeCategories(eModeCategoryUpdates);
 
-  //   currentEmodeConfig = AaveV3Ethereum.POOL.getEModeCategoryCollateralConfig(eModeId);
+    afterEmodeConfig = AaveV3Ethereum.POOL.getEModeCategoryCollateralConfig(eModeId);
+    afterLabel = AaveV3Ethereum.POOL.getEModeCategoryLabel(eModeId);
 
-  //   eModeCategoryUpdates[0] = IEngine.EModeCategoryUpdate({
-  //     eModeCategory: eModeId,
-  //     ltv: currentEmodeConfig.ltv - 50, // 0.5% absolute increase
-  //     liqThreshold: currentEmodeConfig.liquidationThreshold - 10, // 0.1% absolute increase
-  //     liqBonus: (currentEmodeConfig.liquidationBonus - 100_00) - 50, // 0.5% absolute increase
-  //     label: EngineFlags.KEEP_CURRENT_STRING
-  //   });
-  //   vm.expectRevert(IRiskSteward.UpdateNotAllowed.selector);
-  //   steward.updateEModeCategories(eModeCategoryUpdates);
+    assertEq(afterEmodeConfig.ltv, currentEmodeConfig.ltv);
+    assertEq(afterEmodeConfig.liquidationThreshold, currentEmodeConfig.liquidationThreshold);
+    assertEq(afterEmodeConfig.liquidationBonus, currentEmodeConfig.liquidationBonus);
+    assertEq(afterLabel, label);
 
-  //   afterEmodeConfig = AaveV3Ethereum.POOL.getEModeCategoryCollateralConfig(eModeId);
-  //   afterLabel = AaveV3Ethereum.POOL.getEModeCategoryLabel(eModeId);
+    lastUpdated = steward.getEModeTimelock(eModeId);
 
-  //   assertNotEq(afterEmodeConfig.ltv, eModeCategoryUpdates[0].ltv);
-  //   assertNotEq(afterEmodeConfig.liquidationThreshold, eModeCategoryUpdates[0].liqThreshold);
-  //   assertNotEq(afterEmodeConfig.liquidationBonus - 100_00, eModeCategoryUpdates[0].liqBonus);
-  //   assertEq(afterLabel, label); // remains same as original
+    assertEq(lastUpdated.eModeLtvLastUpdated, 0);
+    assertEq(lastUpdated.eModeLiquidationThresholdLastUpdated, 0);
+    assertEq(lastUpdated.eModeLiquidationBonusLastUpdated, 0);
+  }
 
-  //   lastUpdated = steward.getEModeTimelock(eModeId);
+  function test_updateEModeCategories_outOfRange() public virtual override {
+    vm.warp(MIN_DELAY);
+    super.test_updateEModeCategories_outOfRange();
+  }
 
-  //   assertNotEq(lastUpdated.eModeLtvLastUpdated, vm.getBlockTimestamp());
-  //   assertNotEq(lastUpdated.eModeLiquidationThresholdLastUpdated, vm.getBlockTimestamp());
-  //   assertNotEq(lastUpdated.eModeLiquidationBonusLastUpdated, vm.getBlockTimestamp());
-  // }
+  function test_updateEModeCategories_debounceNotRespected() public virtual override {
+    uint8 eModeId = 1;
+    DataTypes.CollateralConfig memory currentEmodeConfig = AaveV3Ethereum
+      .POOL
+      .getEModeCategoryCollateralConfig(eModeId);
 
-  // /// should revert as UpdateNotAllowed
-  // function test_updateEModeCategories_outOfRange() public virtual override {
-  //   uint8 eModeId = 1;
-  //   DataTypes.CollateralConfig memory currentEmodeConfig = AaveV3Ethereum
-  //     .POOL
-  //     .getEModeCategoryCollateralConfig(eModeId);
+    IEngine.EModeCategoryUpdate[] memory eModeCategoryUpdates = new IEngine.EModeCategoryUpdate[](
+      1
+    );
+    eModeCategoryUpdates[0] = IEngine.EModeCategoryUpdate({
+      eModeCategory: eModeId,
+      ltv: currentEmodeConfig.ltv + 50, // 0.5% absolute increase
+      liqThreshold: currentEmodeConfig.liquidationThreshold + 10, // 0.1% absolute increase
+      liqBonus: (currentEmodeConfig.liquidationBonus - 100_00) + 50, // 0.5% absolute increase
+      label: EngineFlags.KEEP_CURRENT_STRING
+    });
 
-  //   IEngine.EModeCategoryUpdate[] memory eModeCategoryUpdates = new IEngine.EModeCategoryUpdate[](
-  //     1
-  //   );
-  //   eModeCategoryUpdates[0] = IEngine.EModeCategoryUpdate({
-  //     eModeCategory: eModeId,
-  //     ltv: currentEmodeConfig.ltv + 51, // 0.5% absolute increase
-  //     liqThreshold: currentEmodeConfig.liquidationThreshold + 11, // 0.11% absolute increase
-  //     liqBonus: (currentEmodeConfig.liquidationBonus - 100_00) + 51, // 0.51% absolute increase
-  //     label: EngineFlags.KEEP_CURRENT_STRING
-  //   });
+    vm.startPrank(riskCouncil);
+    // expect revert as minimum time has not passed for next update
+    vm.expectRevert(IRiskSteward.DebounceNotRespected.selector);
+    steward.updateEModeCategories(eModeCategoryUpdates);
 
-  //   vm.expectRevert(IRiskSteward.UpdateNotAllowed.selector);
-  //   vm.prank(riskCouncil);
-  //   steward.updateEModeCategories(eModeCategoryUpdates);
+    vm.warp(MIN_DELAY - 1);
 
-  //   // after min time passed test eMode update decrease
-  //   skip(1);
+    // expect revert as minimum time has not passed for next update
+    vm.expectRevert(IRiskSteward.DebounceNotRespected.selector);
+    steward.updateEModeCategories(eModeCategoryUpdates);
+  }
 
-  //   eModeCategoryUpdates[0] = IEngine.EModeCategoryUpdate({
-  //     eModeCategory: eModeId,
-  //     ltv: currentEmodeConfig.ltv - 51, // 0.51% absolute increase
-  //     liqThreshold: currentEmodeConfig.liquidationThreshold - 11, // 0.11% absolute increase
-  //     liqBonus: (currentEmodeConfig.liquidationBonus - 100_00) - 51, // 0.51% absolute increase
-  //     label: EngineFlags.KEEP_CURRENT_STRING
-  //   });
-  //   vm.expectRevert(IRiskSteward.UpdateNotAllowed.selector);
-  //   vm.prank(riskCouncil);
-  //   steward.updateEModeCategories(eModeCategoryUpdates);
-  // }
-
-  // /// should revert as UpdateNotAllowed
-  // function test_updateEModeCategories_debounceNotRespected() public virtual override {
-  //   uint8 eModeId = 1;
-  //   DataTypes.CollateralConfig memory currentEmodeConfig = AaveV3Ethereum
-  //     .POOL
-  //     .getEModeCategoryCollateralConfig(eModeId);
-
-  //   IEngine.EModeCategoryUpdate[] memory eModeCategoryUpdates = new IEngine.EModeCategoryUpdate[](
-  //     1
-  //   );
-  //   eModeCategoryUpdates[0] = IEngine.EModeCategoryUpdate({
-  //     eModeCategory: eModeId,
-  //     ltv: currentEmodeConfig.ltv + 50, // 0.5% absolute increase
-  //     liqThreshold: currentEmodeConfig.liquidationThreshold + 10, // 0.1% absolute increase
-  //     liqBonus: (currentEmodeConfig.liquidationBonus - 100_00) + 50, // 0.5% absolute increase
-  //     label: EngineFlags.KEEP_CURRENT_STRING
-  //   });
-
-  //   vm.expectRevert(IRiskSteward.UpdateNotAllowed.selector);
-  //   vm.prank(riskCouncil);
-  //   steward.updateEModeCategories(eModeCategoryUpdates);
-  // }
-
-  // /// should revert as UpdateNotAllowed
-  // function test_updateEModeCategories_eModeDoesNotExist() public virtual override {
-  //   uint8 eModeId = 100;
-  //   IEngine.EModeCategoryUpdate[] memory eModeCategoryUpdates = new IEngine.EModeCategoryUpdate[](
-  //     1
-  //   );
-  //   eModeCategoryUpdates[0] = IEngine.EModeCategoryUpdate({
-  //     eModeCategory: eModeId,
-  //     ltv: 50,
-  //     liqThreshold: 50,
-  //     liqBonus: 100_00,
-  //     label: EngineFlags.KEEP_CURRENT_STRING
-  //   });
-
-  //   vm.expectRevert(IRiskSteward.UpdateNotAllowed.selector);
-  //   vm.prank(riskCouncil);
-  //   steward.updateEModeCategories(eModeCategoryUpdates);
-  // }
-
-  // /// should revert as UpdateNotAllowed
-  // function test_updateEModeCategories_eModeRestricted() public virtual override {
-  //   uint8 eModeCategoryId = 1;
-  //   vm.prank(GovernanceV3Ethereum.EXECUTOR_LVL_1);
-  //   steward.setEModeCategoryRestricted(eModeCategoryId, true);
-
-  //   IEngine.EModeCategoryUpdate[] memory eModeCategoryUpdates = new IEngine.EModeCategoryUpdate[](
-  //     1
-  //   );
-  //   eModeCategoryUpdates[0] = IEngine.EModeCategoryUpdate({
-  //     eModeCategory: eModeCategoryId,
-  //     ltv: 50,
-  //     liqThreshold: 50,
-  //     liqBonus: 100_00,
-  //     label: EngineFlags.KEEP_CURRENT_STRING
-  //   });
-
-  //   vm.expectRevert(IRiskSteward.UpdateNotAllowed.selector);
-  //   vm.prank(riskCouncil);
-  //   steward.updateEModeCategories(eModeCategoryUpdates);
-  // }
-
-  // /// should revert as UpdateNotAllowed
-  // function test_updateEModeCategories_toValueZeroNotAllowed() public virtual override {
-  //   // set risk config to allow 100% collateral param change to 0
-  //   IRiskSteward.RiskParamConfig memory eModeParamConfig = IRiskSteward.RiskParamConfig({
-  //     minDelay: 3 days,
-  //     maxPercentChange: 100_00 // 100% relative change
-  //   });
-  //   IRiskSteward.Config memory config;
-  //   config.eModeConfig.ltv = eModeParamConfig;
-  //   config.eModeConfig.liquidationThreshold = eModeParamConfig;
-  //   config.eModeConfig.liquidationBonus = eModeParamConfig;
-
-  //   vm.prank(GovernanceV3Ethereum.EXECUTOR_LVL_1);
-  //   steward.setRiskConfig(config);
-
-  //   IEngine.EModeCategoryUpdate[] memory eModeCategoryUpdates = new IEngine.EModeCategoryUpdate[](
-  //     1
-  //   );
-  //   eModeCategoryUpdates[0] = IEngine.EModeCategoryUpdate({
-  //     eModeCategory: 1,
-  //     ltv: 0,
-  //     liqThreshold: 0,
-  //     liqBonus: 0,
-  //     label: EngineFlags.KEEP_CURRENT_STRING
-  //   });
-
-  //   vm.expectRevert(IRiskSteward.UpdateNotAllowed.selector);
-  //   vm.prank(riskCouncil);
-  //   steward.updateEModeCategories(eModeCategoryUpdates);
-  // }
-
-  // /// should revert as UpdateNotAllowed
-  // function test_updateEModeCategories_allKeepCurrent() public virtual override {
-  //   uint8 eModeId = 1;
-  //   DataTypes.CollateralConfig memory prevEmodeConfig = AaveV3Ethereum
-  //     .POOL
-  //     .getEModeCategoryCollateralConfig(eModeId);
-  //   string memory prevLabel = AaveV3Ethereum.POOL.getEModeCategoryLabel(eModeId);
-  //   RiskSteward.EModeDebounce memory prevLastUpdated = steward.getEModeTimelock(eModeId);
-
-  //   IEngine.EModeCategoryUpdate[] memory eModeCategoryUpdates = new IEngine.EModeCategoryUpdate[](
-  //     1
-  //   );
-  //   eModeCategoryUpdates[0] = IEngine.EModeCategoryUpdate({
-  //     eModeCategory: eModeId,
-  //     ltv: EngineFlags.KEEP_CURRENT,
-  //     liqThreshold: EngineFlags.KEEP_CURRENT,
-  //     liqBonus: EngineFlags.KEEP_CURRENT,
-  //     label: EngineFlags.KEEP_CURRENT_STRING
-  //   });
-
-  //   vm.startPrank(riskCouncil);
-  //   vm.expectRevert(IRiskSteward.UpdateNotAllowed.selector);
-  //   steward.updateEModeCategories(eModeCategoryUpdates);
-
-  //   DataTypes.CollateralConfig memory afterEmodeConfig = AaveV3Ethereum
-  //     .POOL
-  //     .getEModeCategoryCollateralConfig(eModeId);
-  //   RiskSteward.EModeDebounce memory afterLastUpdated = steward.getEModeTimelock(eModeId);
-  //   string memory afterLabel = AaveV3Ethereum.POOL.getEModeCategoryLabel(eModeId);
-
-  //   assertEq(afterEmodeConfig.ltv, prevEmodeConfig.ltv);
-  //   assertEq(afterEmodeConfig.liquidationThreshold, prevEmodeConfig.liquidationThreshold);
-  //   assertEq(afterEmodeConfig.liquidationBonus, prevEmodeConfig.liquidationBonus);
-  //   assertEq(afterLabel, prevLabel);
-
-  //   assertEq(prevLastUpdated.eModeLtvLastUpdated, afterLastUpdated.eModeLtvLastUpdated);
-  //   assertEq(
-  //     prevLastUpdated.eModeLiquidationThresholdLastUpdated,
-  //     afterLastUpdated.eModeLiquidationThresholdLastUpdated
-  //   );
-  //   assertEq(
-  //     prevLastUpdated.eModeLiquidationBonusLastUpdated,
-  //     afterLastUpdated.eModeLiquidationBonusLastUpdated
-  //   );
-  // }
-
-  // /// should revert as UpdateNotAllowed
-  // function test_updateEModeCategories_sameUpdate() public virtual override {
-  //   uint8 eModeId = 1;
-  //   DataTypes.CollateralConfig memory prevEmodeConfig = AaveV3Ethereum
-  //     .POOL
-  //     .getEModeCategoryCollateralConfig(eModeId);
-  //   string memory prevLabel = AaveV3Ethereum.POOL.getEModeCategoryLabel(eModeId);
-  //   RiskSteward.EModeDebounce memory prevLastUpdated = steward.getEModeTimelock(eModeId);
-
-  //   IEngine.EModeCategoryUpdate[] memory eModeCategoryUpdates = new IEngine.EModeCategoryUpdate[](
-  //     1
-  //   );
-  //   eModeCategoryUpdates[0] = IEngine.EModeCategoryUpdate({
-  //     eModeCategory: eModeId,
-  //     ltv: EngineFlags.KEEP_CURRENT,
-  //     liqThreshold: EngineFlags.KEEP_CURRENT,
-  //     liqBonus: EngineFlags.KEEP_CURRENT,
-  //     label: EngineFlags.KEEP_CURRENT_STRING
-  //   });
-
-  //   vm.startPrank(riskCouncil);
-  //   vm.expectRevert(IRiskSteward.UpdateNotAllowed.selector);
-  //   steward.updateEModeCategories(eModeCategoryUpdates);
-
-  //   DataTypes.CollateralConfig memory afterEmodeConfig = AaveV3Ethereum
-  //     .POOL
-  //     .getEModeCategoryCollateralConfig(eModeId);
-  //   RiskSteward.EModeDebounce memory afterLastUpdated = steward.getEModeTimelock(eModeId);
-  //   string memory afterLabel = AaveV3Ethereum.POOL.getEModeCategoryLabel(eModeId);
-
-  //   assertEq(afterEmodeConfig.ltv, prevEmodeConfig.ltv);
-  //   assertEq(afterEmodeConfig.liquidationThreshold, prevEmodeConfig.liquidationThreshold);
-  //   assertEq(afterEmodeConfig.liquidationBonus, prevEmodeConfig.liquidationBonus);
-  //   assertEq(afterLabel, prevLabel);
-
-  //   assertEq(prevLastUpdated.eModeLtvLastUpdated, afterLastUpdated.eModeLtvLastUpdated);
-  //   assertEq(
-  //     prevLastUpdated.eModeLiquidationThresholdLastUpdated,
-  //     afterLastUpdated.eModeLiquidationThresholdLastUpdated
-  //   );
-  //   assertEq(
-  //     prevLastUpdated.eModeLiquidationBonusLastUpdated,
-  //     afterLastUpdated.eModeLiquidationBonusLastUpdated
-  //   );
-  // }
-
-  // /// should revert as UpdateNotAllowed
-  // function test_updateEModeCategories_labelChangeNotAllowed() public virtual override {
-  //   uint8 eModeId = 1;
-  //   string memory newLabel = 'NEW_EMODE_LABEL';
-
-  //   IEngine.EModeCategoryUpdate[] memory eModeCategoryUpdates = new IEngine.EModeCategoryUpdate[](
-  //     1
-  //   );
-  //   eModeCategoryUpdates[0] = IEngine.EModeCategoryUpdate({
-  //     eModeCategory: eModeId,
-  //     ltv: EngineFlags.KEEP_CURRENT,
-  //     liqThreshold: EngineFlags.KEEP_CURRENT,
-  //     liqBonus: EngineFlags.KEEP_CURRENT,
-  //     label: newLabel
-  //   });
-
-  //   vm.prank(riskCouncil);
-  //   vm.expectRevert(IRiskSteward.UpdateNotAllowed.selector);
-  //   steward.updateEModeCategories(eModeCategoryUpdates);
-  // }
+  function test_updateEModeCategories_sameUpdate() public virtual override {
+    vm.warp(MIN_DELAY);
+    super.test_updateEModeCategories_sameUpdate();
+  }
 
   /* ----------------------------- Collateral Tests ----------------------------- */
-  // function test_updateCollateralSide_outOfRange() public virtual override {
-  //   (, uint256 ltvBefore, uint256 ltBefore, uint256 lbBefore, , , , , , ) = AaveV3Ethereum
-  //     .AAVE_PROTOCOL_DATA_PROVIDER
-  //     .getReserveConfigurationData(AaveV3EthereumAssets.UNI_UNDERLYING);
+  function test_updateCollateralSide_outOfRange() public virtual override {
+    (, uint256 ltvBefore, uint256 ltBefore, uint256 lbBefore, , , , , , ) = AaveV3Ethereum
+      .AAVE_PROTOCOL_DATA_PROVIDER
+      .getReserveConfigurationData(AaveV3EthereumAssets.UNI_UNDERLYING);
 
-  //   // as the definition is with 2 decimals, and config engine does not take the decimals into account, so we divide by 100.
-  //   uint256 debtCeilingBefore = AaveV3Ethereum.AAVE_PROTOCOL_DATA_PROVIDER.getDebtCeiling(
-  //     AaveV3EthereumAssets.UNI_UNDERLYING
-  //   ) / 100;
+    // as the definition is with 2 decimals, and config engine does not take the decimals into account, so we divide by 100.
+    uint256 debtCeilingBefore = AaveV3Ethereum.AAVE_PROTOCOL_DATA_PROVIDER.getDebtCeiling(
+      AaveV3EthereumAssets.UNI_UNDERLYING
+    ) / 100;
 
-  //   IEngine.CollateralUpdate[] memory collateralUpdates = new IEngine.CollateralUpdate[](1);
-  //   collateralUpdates[0] = IEngine.CollateralUpdate({
-  //     asset: AaveV3EthereumAssets.UNI_UNDERLYING,
-  //     ltv: ltvBefore + 12_00, // 12% absolute increase
-  //     liqThreshold: ltBefore + 11_00, // 11% absolute increase
-  //     liqBonus: (lbBefore - 100_00) + 3_00, // 3% absolute increase
-  //     debtCeiling: (debtCeilingBefore * 112) / 100, // 12% relative increase
-  //     liqProtocolFee: EngineFlags.KEEP_CURRENT
-  //   });
+    IEngine.CollateralUpdate[] memory collateralUpdates = new IEngine.CollateralUpdate[](1);
+    collateralUpdates[0] = IEngine.CollateralUpdate({
+      asset: AaveV3EthereumAssets.UNI_UNDERLYING,
+      ltv: ltvBefore + 12_00, // 12% absolute increase
+      liqThreshold: ltBefore + 11_00, // 11% absolute increase
+      liqBonus: (lbBefore - 100_00) + 3_00, // 3% absolute increase
+      debtCeiling: (debtCeilingBefore * 112) / 100, // 12% relative increase
+      liqProtocolFee: EngineFlags.KEEP_CURRENT
+    });
 
-  //   vm.startPrank(riskCouncil);
-  //   steward.updateCollateralSide(collateralUpdates);
+    vm.startPrank(riskCouncil);
+    // should not revert, as allowable range is set to max uint128 percent change
+    steward.updateCollateralSide(collateralUpdates);
 
-  //   collateralUpdates[0] = IEngine.CollateralUpdate({
-  //     asset: AaveV3EthereumAssets.UNI_UNDERLYING,
-  //     ltv: ltvBefore - 11_00, // 11% absolute decrease
-  //     liqThreshold: ltBefore - 11_00, // 11% absolute decrease
-  //     liqBonus: (lbBefore - 100_00) - 2_50, // 2.5% absolute decrease
-  //     debtCeiling: (debtCeilingBefore * 85) / 100, // 15% relative decrease
-  //     liqProtocolFee: EngineFlags.KEEP_CURRENT
-  //   });
+    // no time needs to pass to update again as delay is set to 0
 
-  //   // with 0 delay, range is satisfied
-  //   steward.updateCollateralSide(collateralUpdates);
-  //   vm.stopPrank();
-  // }
+    collateralUpdates[0] = IEngine.CollateralUpdate({
+      asset: AaveV3EthereumAssets.UNI_UNDERLYING,
+      ltv: ltvBefore - 11_00, // 11% absolute decrease
+      liqThreshold: ltBefore - 11_00, // 11% absolute decrease
+      liqBonus: (lbBefore - 100_00) - 2_50, // 2.5% absolute decrease
+      debtCeiling: (debtCeilingBefore * 85) / 100, // 15% relative decrease
+      liqProtocolFee: EngineFlags.KEEP_CURRENT
+    });
+
+    // should not revert, as allowable range is set to max uint128 percent change
+    steward.updateCollateralSide(collateralUpdates);
+    vm.stopPrank();
+  }
 
   function test_updateCollateralSide_debounceNotRespected() public virtual override {
     (, uint256 ltvBefore, , , , , , , , ) = AaveV3Ethereum
@@ -760,8 +429,6 @@ contract CollateralRiskSteward_Test is RiskSteward_Test {
     vm.startPrank(riskCouncil);
     steward.updateCollateralSide(collateralUpdates);
 
-    skip(1);
-
     (, ltvBefore, , , , , , , , ) = AaveV3Ethereum
       .AAVE_PROTOCOL_DATA_PROVIDER
       .getReserveConfigurationData(AaveV3EthereumAssets.UNI_UNDERLYING);
@@ -775,7 +442,7 @@ contract CollateralRiskSteward_Test is RiskSteward_Test {
       liqProtocolFee: EngineFlags.KEEP_CURRENT
     });
 
-    // delay time is 0 so debounce is respected
+    // will not revert as delay config is 0
     steward.updateCollateralSide(collateralUpdates);
     vm.stopPrank();
   }
