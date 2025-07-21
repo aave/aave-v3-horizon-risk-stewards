@@ -38,14 +38,14 @@ library DeployHorizonRiskStewards {
           })
         }),
         eModeConfig: IRiskSteward.EmodeConfig({
-          ltv: IRiskSteward.RiskParamConfig({minDelay: type(uint40).max, maxPercentChange: 0}),
+          ltv: IRiskSteward.RiskParamConfig({minDelay: 0, maxPercentChange: type(uint128).max}),
           liquidationThreshold: IRiskSteward.RiskParamConfig({
-            minDelay: type(uint40).max,
-            maxPercentChange: 0
+            minDelay: 0,
+            maxPercentChange: type(uint128).max
           }),
           liquidationBonus: IRiskSteward.RiskParamConfig({
-            minDelay: type(uint40).max,
-            maxPercentChange: 0
+            minDelay: 0,
+            maxPercentChange: type(uint128).max
           })
         }),
         rateConfig: IRiskSteward.RateConfig({
@@ -94,13 +94,14 @@ library DeployHorizonRiskStewards {
 // make deploy-ledger contract=scripts/deploy/DeployHorizonStewards.s.sol:DeployEthereum chain=mainnet
 // dry run: make deploy-pk contract=scripts/deploy/DeployHorizonStewards.s.sol:DeployEthereum chain=mainnet dry=1
 contract DeployEthereum is EthereumScript {
+  address public constant HORIZON_ADVANCED_MULTISIG = 0x4444dE8a4AA3401a3AEC584de87B0f21E3e601CA;
   function run() external {
     vm.startBroadcast();
     DeployHorizonRiskStewards._deployRiskStewards(
       address(AaveV3Ethereum.POOL),
       AaveV3Ethereum.CONFIG_ENGINE,
-      address(1), // TODO: advanced multisig
-      address(1) // TODO: advanced multisig
+      HORIZON_ADVANCED_MULTISIG,
+      HORIZON_ADVANCED_MULTISIG
     );
     vm.stopBroadcast();
   }

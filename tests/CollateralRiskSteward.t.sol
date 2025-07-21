@@ -260,82 +260,42 @@ contract CollateralRiskSteward_Test is RiskSteward_Test {
   }
 
   /* ----------------------------- EMode Category Update Tests ----------------------------- */
-  /// should revert due to config
-  function test_updateEModeCategories() public virtual override {
+  /// should not revert, as allowable range is set to max uint128 percent change
+  function test_updateEModeCategories_outOfRange() public virtual override {
     uint8 eModeId = 1;
     DataTypes.CollateralConfig memory currentEmodeConfig = AaveV3Ethereum
       .POOL
       .getEModeCategoryCollateralConfig(eModeId);
-    string memory label = AaveV3Ethereum.POOL.getEModeCategoryLabel(eModeId);
 
     IEngine.EModeCategoryUpdate[] memory eModeCategoryUpdates = new IEngine.EModeCategoryUpdate[](
       1
     );
     eModeCategoryUpdates[0] = IEngine.EModeCategoryUpdate({
       eModeCategory: eModeId,
-      ltv: currentEmodeConfig.ltv + 50, // 0.5% absolute increase
-      liqThreshold: currentEmodeConfig.liquidationThreshold + 10, // 0.1% absolute increase
-      liqBonus: (currentEmodeConfig.liquidationBonus - 100_00) + 50, // 0.5% absolute increase
+      ltv: currentEmodeConfig.ltv + 51, // 0.5% absolute increase
+      liqThreshold: currentEmodeConfig.liquidationThreshold + 11, // 0.11% absolute increase
+      liqBonus: (currentEmodeConfig.liquidationBonus - 100_00) + 51, // 0.51% absolute increase
       label: EngineFlags.KEEP_CURRENT_STRING
     });
 
     vm.startPrank(riskCouncil);
-    // expect revert as minimum time has not passed for next update
-    vm.expectRevert(IRiskSteward.DebounceNotRespected.selector);
+    // should not revert, as allowable range is set to max uint128 percent change
     steward.updateEModeCategories(eModeCategoryUpdates);
 
-    RiskSteward.EModeDebounce memory lastUpdated = steward.getEModeTimelock(eModeId);
-
-    DataTypes.CollateralConfig memory afterEmodeConfig = AaveV3Ethereum
-      .POOL
-      .getEModeCategoryCollateralConfig(eModeId);
-    string memory afterLabel = AaveV3Ethereum.POOL.getEModeCategoryLabel(eModeId);
-
-    assertEq(afterEmodeConfig.ltv, currentEmodeConfig.ltv);
-    assertEq(afterEmodeConfig.liquidationThreshold, currentEmodeConfig.liquidationThreshold);
-    assertEq(afterEmodeConfig.liquidationBonus, currentEmodeConfig.liquidationBonus);
-    assertEq(afterLabel, label);
-
-    assertEq(lastUpdated.eModeLtvLastUpdated, 0);
-    assertEq(lastUpdated.eModeLiquidationThresholdLastUpdated, 0);
-    assertEq(lastUpdated.eModeLiquidationBonusLastUpdated, 0);
-
-    // after min time passed test eMode update decrease
-    vm.warp(MIN_DELAY);
-
-    currentEmodeConfig = AaveV3Ethereum.POOL.getEModeCategoryCollateralConfig(eModeId);
+    // no time needs to pass to update again as minDelay is set to 0
 
     eModeCategoryUpdates[0] = IEngine.EModeCategoryUpdate({
       eModeCategory: eModeId,
-      ltv: currentEmodeConfig.ltv - 50, // 0.5% absolute increase
-      liqThreshold: currentEmodeConfig.liquidationThreshold - 10, // 0.1% absolute increase
-      liqBonus: (currentEmodeConfig.liquidationBonus - 100_00) - 50, // 0.5% absolute increase
+      ltv: currentEmodeConfig.ltv - 51, // 0.51% absolute increase
+      liqThreshold: currentEmodeConfig.liquidationThreshold - 11, // 0.11% absolute increase
+      liqBonus: (currentEmodeConfig.liquidationBonus - 100_00) - 51, // 0.51% absolute increase
       label: EngineFlags.KEEP_CURRENT_STRING
     });
-    // expect revert as UpdateNotInRange
-    vm.expectRevert(IRiskSteward.UpdateNotInRange.selector);
+    // should not revert, as allowable range is set to max uint128 percent change
     steward.updateEModeCategories(eModeCategoryUpdates);
-
-    afterEmodeConfig = AaveV3Ethereum.POOL.getEModeCategoryCollateralConfig(eModeId);
-    afterLabel = AaveV3Ethereum.POOL.getEModeCategoryLabel(eModeId);
-
-    assertEq(afterEmodeConfig.ltv, currentEmodeConfig.ltv);
-    assertEq(afterEmodeConfig.liquidationThreshold, currentEmodeConfig.liquidationThreshold);
-    assertEq(afterEmodeConfig.liquidationBonus, currentEmodeConfig.liquidationBonus);
-    assertEq(afterLabel, label);
-
-    lastUpdated = steward.getEModeTimelock(eModeId);
-
-    assertEq(lastUpdated.eModeLtvLastUpdated, 0);
-    assertEq(lastUpdated.eModeLiquidationThresholdLastUpdated, 0);
-    assertEq(lastUpdated.eModeLiquidationBonusLastUpdated, 0);
   }
 
-  function test_updateEModeCategories_outOfRange() public virtual override {
-    vm.warp(MIN_DELAY);
-    super.test_updateEModeCategories_outOfRange();
-  }
-
+  /// should not revert, as minDelay config is 0
   function test_updateEModeCategories_debounceNotRespected() public virtual override {
     uint8 eModeId = 1;
     DataTypes.CollateralConfig memory currentEmodeConfig = AaveV3Ethereum
@@ -354,23 +314,24 @@ contract CollateralRiskSteward_Test is RiskSteward_Test {
     });
 
     vm.startPrank(riskCouncil);
-    // expect revert as minimum time has not passed for next update
-    vm.expectRevert(IRiskSteward.DebounceNotRespected.selector);
     steward.updateEModeCategories(eModeCategoryUpdates);
 
-    vm.warp(MIN_DELAY - 1);
+    currentEmodeConfig = AaveV3Ethereum.POOL.getEModeCategoryCollateralConfig(eModeId);
+    eModeCategoryUpdates[0] = IEngine.EModeCategoryUpdate({
+      eModeCategory: eModeId,
+      ltv: currentEmodeConfig.ltv + 20, // 0.2% absolute increase
+      liqThreshold: currentEmodeConfig.liquidationThreshold + 30, // 0.3% absolute increase
+      liqBonus: (currentEmodeConfig.liquidationBonus - 100_00) + 40, // 0.4% absolute increase
+      label: EngineFlags.KEEP_CURRENT_STRING
+    });
 
-    // expect revert as minimum time has not passed for next update
-    vm.expectRevert(IRiskSteward.DebounceNotRespected.selector);
+    // will not revert as minDelay config is 0
     steward.updateEModeCategories(eModeCategoryUpdates);
-  }
-
-  function test_updateEModeCategories_sameUpdate() public virtual override {
-    vm.warp(MIN_DELAY);
-    super.test_updateEModeCategories_sameUpdate();
+    vm.stopPrank();
   }
 
   /* ----------------------------- Collateral Tests ----------------------------- */
+  /// should not revert, as allowable range is set to max uint128 percent change
   function test_updateCollateralSide_outOfRange() public virtual override {
     (, uint256 ltvBefore, uint256 ltBefore, uint256 lbBefore, , , , , , ) = AaveV3Ethereum
       .AAVE_PROTOCOL_DATA_PROVIDER
@@ -395,7 +356,7 @@ contract CollateralRiskSteward_Test is RiskSteward_Test {
     // should not revert, as allowable range is set to max uint128 percent change
     steward.updateCollateralSide(collateralUpdates);
 
-    // no time needs to pass to update again as delay is set to 0
+    // no time needs to pass to update again as minDelay is set to 0
 
     collateralUpdates[0] = IEngine.CollateralUpdate({
       asset: AaveV3EthereumAssets.UNI_UNDERLYING,
@@ -411,6 +372,7 @@ contract CollateralRiskSteward_Test is RiskSteward_Test {
     vm.stopPrank();
   }
 
+  /// should not revert, as minDelay config is 0
   function test_updateCollateralSide_debounceNotRespected() public virtual override {
     (, uint256 ltvBefore, , , , , , , , ) = AaveV3Ethereum
       .AAVE_PROTOCOL_DATA_PROVIDER
@@ -442,7 +404,7 @@ contract CollateralRiskSteward_Test is RiskSteward_Test {
       liqProtocolFee: EngineFlags.KEEP_CURRENT
     });
 
-    // will not revert as delay config is 0
+    // will not revert as minDelay config is 0
     steward.updateCollateralSide(collateralUpdates);
     vm.stopPrank();
   }
